@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added AssetPostprocessors and Shadergraphs to handle Arnold Standard Surface and 3DsMax Physical material import from FBX. 
 - Added support for Smoothness Fade start work when enabling ray traced reflections
 - Added script documentation for SSR, SSAO (ray tracing), GI, Light Cluster, RayTracingSettings, Ray Counters, etc.
+- Added a fallback for ray traced area light shadows in case the material is forward or the lit mode is forward.
 
 ### Fixed
 - Update documentation of HDRISky-Backplate, precise how to have Ambient Occlusion on the Backplate
@@ -377,6 +378,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed the blend of reflections based on the weight.
 - Fixed fallback for ray traced reflections when denoising is enabled.
 - Fixed error spam issue with terrain detail terrainDetailUnsupported (cases 1211848)
+- Fixed a bug related to ray traced area light shadow history.
 
 ### Changed
 - Color buffer pyramid is not allocated anymore if neither refraction nor distortion are enabled
