@@ -2,6 +2,7 @@
 * [Getting started](InstallingAndConfiguringURP.md)
   * [Create a Project from a Template](creating-a-new-project-with-urp.md)
   * [Install URP into an existing Project](InstallURPIntoAProject.md)
+  * [Upgrade from LWRP to URP](upgrade-lwrp-to-urp.md)
   * [The Universal Render Pipeline Asset](universalrp-asset.md)
 * [Rendering](rendering-in-universalrp.md)
 * [Lighting](lighting.md)
