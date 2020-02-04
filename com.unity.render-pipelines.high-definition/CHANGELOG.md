@@ -52,8 +52,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added user-selectable format for the post processing passes.
 - Added support for alpha channel in some post-processing passes (DoF, TAA, Uber).
 - Added warnings in FrameSettings inspector when using DXR and atempting to use Asynchronous Execution.
-- Added path tracing support for refraction and internal reflections.
-- Added support for Thin Refraction Model and Lit's Clear Coat in Path Tracing.
 - Exposed Stencil bits that can be used by the user.
 - Added history rejection based on velocity of intersected objects for directional, point and spot lights.
 - Added a affectsVolumetric field to the HDAdditionalLightData API to know if light affects volumetric fog.
@@ -67,6 +65,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added AssetPostprocessors and Shadergraphs to handle Arnold Standard Surface and 3DsMax Physical material import from FBX.
 - Added support for Smoothness Fade start work when enabling ray traced reflections
 - Added script documentation for SSR, SSAO (ray tracing), GI, Light Cluster, RayTracingSettings, Ray Counters, etc.
+- Added path tracing support for refraction and internal reflections.
+- Added support for Thin Refraction Model and Lit's Clear Coat in Path Tracing.
 
 ### Fixed
 - Update documentation of HDRISky-Backplate, precise how to have Ambient Occlusion on the Backplate
