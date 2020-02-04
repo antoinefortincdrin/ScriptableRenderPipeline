@@ -16,7 +16,6 @@
     * [Rendering to a Render Texture](rendering-to-a-render-texture.md)
   * [Camera rendering order and overdraw](cameras-advanced.md)
   * [Camera component reference](camera-component-reference.md)
-
 * [Post-processing](integration-with-post-processing.md)
   * [Volumes](Volumes.md)
     * [Volume Profile](VolumeProfile.md)
@@ -38,7 +37,6 @@
     * [Tonemapping](post-processing-tonemapping.md)
     * [Vignette](post-processing-vignette.md)
     * [White Balance](Post-Processing-White-Balance.md)
-
 * [Shaders and Materials](shaders-in-universalrp.md)
   * [Shading Models](shading-model.md)
   * [Lit](lit-shader.md)
@@ -50,27 +48,20 @@
   * [Particles Unlit](particles-unlit-shader.md)
   * [Upgrading shaders from Built-in](upgrading-your-shaders.md)
   * [Shader stripping](shader-stripping.md)
-
 * [2D](2d-index.md)
   * [Introduction to Lights 2D](Lights-2D-intro.md)
   * [Requirements and setup](Setup.md)
   * [Preparing and upgrading](PrepShader.md)
   * [Normal map and mask Textures](SecondaryTextures.md)
   * [Lights 2D properties](2DLightProperties.md)
-
     * [Light types](LightTypes.md)
   * [Configuring the 2D Renderer Asset](2DRendererData_overview.md)
-
     * [HDR emulation scale](HDREmulationScale.md)
     * [Light Blend Styles](LightBlendStyles.md)
-
     * [2D Shadows](2DShadows.md)
   * [2D Renderer and Shader Graph](ShaderGraph.md)
   * [2D Pixel Perfect](2d-pixelperfect.md)
     * [Cinemachine Pixel Perfect extension](pixel-cinemachine.md)
-
 * [Building for consoles](Building-For-Consoles.md)
-  
 * [Frequently asked questions (FAQ)](faq.md)
-
 * [Feature Comparison with Built-in](universalrp-builtin-feature-comparison.md)
