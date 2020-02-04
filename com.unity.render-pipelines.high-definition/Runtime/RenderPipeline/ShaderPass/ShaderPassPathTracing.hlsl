@@ -138,7 +138,9 @@ void ClosestHit(inout RayIntersection rayIntersection : SV_RayPayload, Attribute
                 nextRayIntersection.remainingDepth = _RaytracingMaxRecursion + 1;
                 rayDescriptor.TMax -= _RaytracingRayBias;
                 nextRayIntersection.t = rayDescriptor.TMax;
-                TraceRay(_RaytracingAccelerationStructure, RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+
+                // FIXME: For the time being, we choose not to apply any back/front-face culling for shadows, will possibly change in the future
+                TraceRay(_RaytracingAccelerationStructure, RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
                          RAYTRACINGRENDERERFLAG_CAST_SHADOW, 0, 1, 0, rayDescriptor, nextRayIntersection);
 
                 if (nextRayIntersection.t >= rayDescriptor.TMax)

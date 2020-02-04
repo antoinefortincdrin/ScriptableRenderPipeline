@@ -174,7 +174,7 @@ bool SampleLights(LightList lightList,
 
             if (lightData.size.x > 0.0) // Stores the square radius
             {
-                float3x3 localFrame = GetLocalFrame(outgoingDir);
+                float3x3 localFrame = GetLocalFrame(normalize(outgoingDir));
                 SampleCone(inputSample, sqrt(saturate(1.0 - lightData.size.x / sqDist)), outgoingDir, pdf); // computes rcpPdf
 
                 outgoingDir = normalize(outgoingDir.x * localFrame[0] + outgoingDir.y * localFrame[1] + outgoingDir.z * localFrame[2]);
