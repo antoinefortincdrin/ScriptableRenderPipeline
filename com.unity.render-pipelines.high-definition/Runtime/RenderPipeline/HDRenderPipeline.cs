@@ -10,6 +10,9 @@ using Utilities;
 
 namespace UnityEngine.Rendering.HighDefinition
 {
+    /// <summary>
+    /// High Definition Render Pipeline class.
+    /// </summary>
     public partial class HDRenderPipeline : RenderPipeline
     {
         #region Default Settings
@@ -69,6 +72,9 @@ namespace UnityEngine.Rendering.HighDefinition
         }
         #endregion
 
+        /// <summary>
+        /// Shader Tag for the High Definition Render Pipeline.
+        /// </summary>
         public const string k_ShaderTagName = "HDRenderPipeline";
 
         readonly HDRenderPipelineAsset m_Asset;
@@ -203,7 +209,11 @@ namespace UnityEngine.Rendering.HighDefinition
 
         // Use to detect frame changes
         int m_FrameCount;
-        float m_LastTime, m_Time;
+        float m_LastTime, m_Time; // Do NOT take the 'animateMaterials' setting into account.
+
+        internal int   GetFrameCount() { return m_FrameCount; }
+        internal float GetLastTime()   { return m_LastTime;   }
+        internal float GetTime()       { return m_Time;       }
 
         GraphicsFormat GetColorBufferFormat()
             => (GraphicsFormat)m_Asset.currentPlatformRenderPipelineSettings.colorBufferFormat;
@@ -217,6 +227,15 @@ namespace UnityEngine.Rendering.HighDefinition
             return (int)Math.Log(highestDim, 2);
         }
 
+        internal int GetCookieAtlasMipCount() => (int)Mathf.Log((int)currentPlatformRenderPipelineSettings.lightLoopSettings.cookieAtlasSize, 2);
+        internal int GetCookieCubeArraySize() => currentPlatformRenderPipelineSettings.lightLoopSettings.cubeCookieTexArraySize;
+
+        internal int GetPlanarReflectionProbeMipCount()
+        {
+            int size = (int)currentPlatformRenderPipelineSettings.lightLoopSettings.planarReflectionAtlasSize;
+            return (int)Mathf.Log(size, 2);
+        }
+
         internal int GetMaxScreenSpaceShadows()
         {
             return currentPlatformRenderPipelineSettings.hdShadowInitParams.supportScreenSpaceShadows ? currentPlatformRenderPipelineSettings.hdShadowInitParams.maxScreenSpaceShadowSlots : 0;
@@ -228,6 +247,9 @@ namespace UnityEngine.Rendering.HighDefinition
         // Debugging
         MaterialPropertyBlock m_SharedPropertyBlock = new MaterialPropertyBlock();
         DebugDisplaySettings m_DebugDisplaySettings = new DebugDisplaySettings();
+        /// <summary>
+        /// Debug display settings.
+        /// </summary>
         public DebugDisplaySettings debugDisplaySettings { get { return m_DebugDisplaySettings; } }
         static DebugDisplaySettings s_NeutralDebugDisplaySettings = new DebugDisplaySettings();
         internal DebugDisplaySettings m_CurrentDebugDisplaySettings;
@@ -286,6 +308,11 @@ namespace UnityEngine.Rendering.HighDefinition
         bool m_ResourcesInitialized = false;
 #endif
 
+        /// <summary>
+        /// HDRenderPipeline constructor.
+        /// </summary>
+        /// <param name="asset">Source HDRenderPipelineAsset.</param>
+        /// <param name="defaultAsset">Defauklt HDRenderPipelineAsset.</param>
         public HDRenderPipeline(HDRenderPipelineAsset asset, HDRenderPipelineAsset defaultAsset)
         {
             m_Asset = asset;
@@ -304,7 +331,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             // The first thing we need to do is to set the defines that depend on the render pipeline settings
-            m_RayTracingSupported = AggreateRayTracingSupport(m_Asset.currentPlatformRenderPipelineSettings);
+            m_RayTracingSupported = GatherRayTracingSupport(m_Asset.currentPlatformRenderPipelineSettings);
 
 #if UNITY_EDITOR
             m_Asset.EvaluateSettings();
@@ -643,6 +670,10 @@ namespace UnityEngine.Rendering.HighDefinition
                 , enlighten = false
                 , overridesLODBias = true
                 , overridesMaximumLODLevel = true
+#if UNITY_2020_1_OR_NEWER
+                , terrainDetailUnsupported = true
+                , rendererProbes = false
+#endif
             };
 
             Lightmapping.SetDelegate(GlobalIlluminationUtils.hdLightsDelegate);
@@ -767,6 +798,10 @@ namespace UnityEngine.Rendering.HighDefinition
             };
         }
 
+        /// <summary>
+        /// Disposable pattern implementation.
+        /// </summary>
+        /// <param name="disposing">Is disposing.</param>
         protected override void Dispose(bool disposing)
         {
             DisposeProbeCameraPool();
@@ -822,7 +857,7 @@ namespace UnityEngine.Rendering.HighDefinition
             CoreUtils.Destroy(m_UpsampleTransparency);
             CoreUtils.Destroy(m_ApplyDistortionMaterial);
             CoreUtils.Destroy(m_ClearStencilBufferMaterial);
-            
+
             CleanupSubsurfaceScattering();
             m_SharedRTManager.Cleanup();
             m_XRSystem.Cleanup();
@@ -913,7 +948,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 LightLoopAllocResolutionDependentBuffers(hdCamera, m_MaxCameraWidth, m_MaxCameraHeight);
                 m_DbufferManager.AllocResolutionDependentBuffers(hdCamera, m_MaxCameraWidth, m_MaxCameraHeight);
-                m_SharedRTManager.AllocateCoarseStencilBuffer(m_MaxCameraWidth, m_MaxCameraHeight);
+                m_SharedRTManager.AllocateCoarseStencilBuffer(m_MaxCameraWidth, m_MaxCameraHeight, hdCamera.viewCount);
             }
         }
 
@@ -942,7 +977,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 ssRefraction.PushShaderParameters(cmd);
 
                 // Set up UnityPerView CBuffer.
-                hdCamera.SetupGlobalParams(cmd, m_Time, m_LastTime, m_FrameCount);
+                hdCamera.SetupGlobalParams(cmd, m_FrameCount);
 
                 cmd.SetGlobalVector(HDShaderIDs._IndirectLightingMultiplier, new Vector4(hdCamera.volumeStack.GetComponent<IndirectLightingController>().indirectDiffuseIntensity.value, 0, 0, 0));
 
@@ -1025,9 +1060,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 // We need the resolve only with msaa
                 resolveIsNecessary = resolveIsNecessary && MSAAEnabled;
-
+                  
                 ComputeShader cs = defaultResources.shaders.resolveStencilCS;
-                int kernel = SampleCountToPassIndex(hdCamera.msaaSamples);
+                int kernel = SampleCountToPassIndex(MSAAEnabled ? hdCamera.msaaSamples : MSAASamples.None);
                 kernel = resolveIsNecessary ? kernel + 3 : kernel; // We have a different variant if we need to resolve to non-MSAA stencil
                 int coarseStencilWidth = HDUtils.DivRoundUp(hdCamera.actualWidth, 8);
                 int coarseStencilHeight = HDUtils.DivRoundUp(hdCamera.actualHeight, 8);
@@ -1117,6 +1152,11 @@ namespace UnityEngine.Rendering.HighDefinition
             }
         }
 
+        /// <summary>
+        /// RenderPipeline Render implementation.
+        /// </summary>
+        /// <param name="renderContext">Current ScriptableRenderContext.</param>
+        /// <param name="cameras">List of cameras to render.</param>
         protected override void Render(ScriptableRenderContext renderContext, Camera[] cameras)
         {
 #if UNITY_EDITOR
@@ -1139,51 +1179,18 @@ namespace UnityEngine.Rendering.HighDefinition
             // or go in detail if debug is activated. Done once for all renderer.
             m_FrameSettingsHistoryEnabled = FrameSettingsHistory.enabled;
 
+            int  newCount = Time.frameCount;
+            bool newFrame = newCount != m_FrameCount;
+            m_FrameCount  = newCount;
+
+            if (newFrame)
             {
-                float newTime;
-                bool  newFrame;
+                m_LastTime = m_Time;                        // Only update time once per frame.
+                m_Time     = Time.time;                     // Does NOT take the 'animateMaterials' setting into account.
+                m_LastTime = Mathf.Min(m_Time, m_LastTime); // Guard against broken Unity behavior. Should not be necessary.
 
-                if (Application.isPlaying)
-                {
-                    newTime  = Time.time; // Using this allows time pausing and scaling
-                    int c    = Time.frameCount;
-                    newFrame = m_FrameCount != c;
-                }
-                else
-                {
-                    // SRP.Render() can be called several times per frame.
-                    // Also, most Time variables do not consistently update in the Scene View.
-                    // This makes reliable detection of the start of the new frame VERY hard.
-                    // One of the exceptions is 'Time.realtimeSinceStartup'.
-                    // Therefore, outside of the Play Mode we update the time at 60 fps,
-                    // and in the Play Mode we can rely on 'Time.frameCount'.
-                    newTime  = Time.realtimeSinceStartup;
-                    newFrame = (newTime - m_Time) > 0.0166f;
-
-                    // If we switch to other scene 'Time.realtimeSinceStartup' is reset, so we need to
-                    // reset also m_Time. Here we simply detect ill case to trigger the reset.
-                    newFrame = newFrame || (newTime <= m_Time);
-                }
-
-                if (newFrame)
-                {
-                    m_ProbeCameraCache.ClearCamerasUnusedFor(2, Time.frameCount);
-                    HDCamera.CleanUnused();
-
-                    if (newTime > m_Time)
-                    {
-                        m_FrameCount++;
-                        m_LastTime = m_Time;
-                        m_Time = newTime;
-                    }
-                    else if (newTime < m_Time)
-                    {
-                        m_FrameCount = 0;
-                        m_LastTime = m_Time;
-                        m_Time = newTime;
-                    }
-                    // Note: We do nothing if newTime = m_Time
-                }
+                m_ProbeCameraCache.ClearCamerasUnusedFor(2, m_FrameCount);
+                HDCamera.CleanUnused();
             }
 
             var dynResHandler = DynamicResolutionHandler.instance;
@@ -1196,6 +1203,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
             );
 
+            // This syntax is awful and hostile to debugging, please don't use it...
             using (ListPool<RenderRequest>.Get(out List<RenderRequest> renderRequests))
             using (ListPool<int>.Get(out List<int> rootRenderRequestIndices))
             using (HashSetPool<int>.Get(out HashSet<int> skipClearCullingResults))
@@ -1378,7 +1386,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             return;
 
                         // Notify that we render the probe at this frame
-                        probe.SetIsRendered(Time.frameCount);
+                        probe.SetIsRendered(m_FrameCount);
 
                         float visibility = ComputeVisibility(visibleInIndex, probe);
 
@@ -1411,6 +1419,8 @@ namespace UnityEngine.Rendering.HighDefinition
                     //      render requests
                     var isViewDependent = visibleProbe.type == ProbeSettings.ProbeType.PlanarProbe;
 
+                    Camera parentCamera;
+
                     if (isViewDependent)
                     {
                         for (int i = 0; i < visibilities.Count; ++i)
@@ -1423,11 +1433,14 @@ namespace UnityEngine.Rendering.HighDefinition
                             var visibleInRenderRequest = renderRequests[visibleInIndex];
                             var viewerTransform = visibleInRenderRequest.hdCamera.camera.transform;
 
+                            parentCamera = visibleInRenderRequest.hdCamera.camera;
+
                             AddHDProbeRenderRequests(
                                 visibleProbe,
                                 viewerTransform,
                                 new List<(int index, float weight)>{visibility},
                                 HDUtils.GetSceneCullingMaskFromCamera(visibleInRenderRequest.hdCamera.camera),
+                                parentCamera,
                                 visibleInRenderRequest.hdCamera.camera.fieldOfView,
                                 visibleInRenderRequest.hdCamera.camera.aspect
                             );
@@ -1435,6 +1448,9 @@ namespace UnityEngine.Rendering.HighDefinition
                     }
                     else
                     {
+                        // No single parent camera for view dependent probes.
+                        parentCamera = null;
+
                         bool visibleInOneViewer = false;
                         for (int i = 0; i < visibilities.Count && !visibleInOneViewer; ++i)
                         {
@@ -1442,7 +1458,7 @@ namespace UnityEngine.Rendering.HighDefinition
                                 visibleInOneViewer = true;
                         }
                         if (visibleInOneViewer)
-                            AddHDProbeRenderRequests(visibleProbe, null, visibilities, 0);
+                            AddHDProbeRenderRequests(visibleProbe, null, visibilities, 0, parentCamera);
                     }
                 }
                 foreach (var pair in renderRequestIndicesWhereTheProbeIsVisible)
@@ -1455,6 +1471,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     Transform viewerTransform,
                     List<(int index, float weight)> visibilities,
                     ulong overrideSceneCullingMask,
+                    Camera parentCamera,
                     float referenceFieldOfView = 90,
                     float referenceAspect = 1
                 )
@@ -1482,7 +1499,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             }
                             break;
                         case ProbeSettings.ProbeType.PlanarProbe:
-                            int desiredPlanarProbeSize = (int)((HDRenderPipeline)RenderPipelineManager.currentPipeline).currentPlatformRenderPipelineSettings.lightLoopSettings.planarReflectionTextureSize;
+                            int desiredPlanarProbeSize = (int)visibleProbe.resolution;
                             if (visibleProbe.realtimeTexture == null || visibleProbe.realtimeTexture.width != desiredPlanarProbeSize)
                             {
                                 visibleProbe.SetTexture(ProbeSettings.Mode.Realtime, HDRenderUtilities.CreatePlanarProbeRenderTarget(desiredPlanarProbeSize));
@@ -1502,7 +1519,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                     for (int j = 0; j < cameraSettings.Count; ++j)
                     {
-                        var camera = m_ProbeCameraCache.GetOrCreate((viewerTransform, visibleProbe, j), Time.frameCount);
+                        var camera = m_ProbeCameraCache.GetOrCreate((viewerTransform, visibleProbe, j), m_FrameCount);
                         var additionalCameraData = camera.GetComponent<HDAdditionalCameraData>();
 
                         if (additionalCameraData == null)
@@ -1543,6 +1560,9 @@ namespace UnityEngine.Rendering.HighDefinition
                             UnsafeGenericPool<HDCullingResults>.Release(_cullingResults);
                             continue;
                         }
+
+                        hdCamera.parentCamera = parentCamera; // Used to inherit the properties of the view
+
                         HDAdditionalCameraData hdCam;
                         camera.TryGetComponent<HDAdditionalCameraData>(out hdCam);
                         hdCam.flipYMode = visibleProbe.type == ProbeSettings.ProbeType.ReflectionProbe
@@ -1880,7 +1900,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 material.Bind(cmd);
 
             // Frustum cull density volumes on the CPU. Can be performed as soon as the camera is set up.
-            DensityVolumeList densityVolumes = PrepareVisibleDensityVolumeList(hdCamera, cmd, m_Time);
+            DensityVolumeList densityVolumes = PrepareVisibleDensityVolumeList(hdCamera, cmd, hdCamera.time);
 
             // Note: Legacy Unity behave like this for ShadowMask
             // When you select ShadowMask in Lighting panel it recompile shaders on the fly with the SHADOW_MASK keyword.
@@ -2095,7 +2115,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     // This call overwrites camera properties passed to the shader system.
                     RenderShadowMaps(renderContext, cmd, cullingResults, hdCamera);
 
-                    hdCamera.SetupGlobalParams(cmd, m_Time, m_LastTime, m_FrameCount);
+                    hdCamera.SetupGlobalParams(cmd, m_FrameCount);
                 }
 
                 if (hdCamera.frameSettings.IsEnabled(FrameSettingsField.RayTracing))
@@ -2573,8 +2593,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
             if (m_DebugDisplaySettings.IsCameraFreezeEnabled())
             {
-                bool cameraIsFrozen = camera.name.Equals(m_DebugDisplaySettings.GetFrozenCameraName());
-                if (cameraIsFrozen)
+                if (m_DebugDisplaySettings.IsCameraFrozen(camera))
                 {
                     if (!frozenCullingParamAvailable)
                     {
@@ -2749,7 +2768,7 @@ namespace UnityEngine.Rendering.HighDefinition
             return result;
         }
 
-        protected static RendererListDesc CreateTransparentRendererListDesc(
+        static RendererListDesc CreateTransparentRendererListDesc(
             CullingResults cull,
             Camera camera,
             ShaderTagId passName,
@@ -2772,7 +2791,7 @@ namespace UnityEngine.Rendering.HighDefinition
             return result;
         }
 
-        protected static RendererListDesc CreateTransparentRendererListDesc(
+        static RendererListDesc CreateTransparentRendererListDesc(
             CullingResults cull,
             Camera camera,
             ShaderTagId[] passNames,
@@ -2795,7 +2814,7 @@ namespace UnityEngine.Rendering.HighDefinition
             return result;
         }
 
-        protected static void DrawOpaqueRendererList(in ScriptableRenderContext renderContext, CommandBuffer cmd, in FrameSettings frameSettings, RendererList rendererList)
+        static void DrawOpaqueRendererList(in ScriptableRenderContext renderContext, CommandBuffer cmd, in FrameSettings frameSettings, RendererList rendererList)
         {
             if (!frameSettings.IsEnabled(FrameSettingsField.OpaqueObjects))
                 return;
@@ -2803,7 +2822,7 @@ namespace UnityEngine.Rendering.HighDefinition
             HDUtils.DrawRendererList(renderContext, cmd, rendererList);
         }
 
-        protected static void DrawTransparentRendererList(in ScriptableRenderContext renderContext, CommandBuffer cmd, in FrameSettings frameSettings, RendererList rendererList)
+        static void DrawTransparentRendererList(in ScriptableRenderContext renderContext, CommandBuffer cmd, in FrameSettings frameSettings, RendererList rendererList)
         {
             if (!frameSettings.IsEnabled(FrameSettingsField.TransparentObjects))
                 return;
@@ -3068,7 +3087,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     CoreUtils.SetRenderTarget(cmd, m_SharedRTManager.GetDepthStencilBuffer());
                     cmd.SetRandomWriteTarget(1, m_SharedRTManager.GetNormalBuffer());
                     cmd.DrawProcedural(Matrix4x4.identity, parameters.decalNormalBufferMaterial, 0, MeshTopology.Triangles, 3, 1);
-                    cmd.ClearRandomWriteTargets(); 
+                    cmd.ClearRandomWriteTargets();
                 }
             }
         }
@@ -3347,11 +3366,15 @@ namespace UnityEngine.Rendering.HighDefinition
             }
         }
 
+        /// <summary>
+        /// Export the provided camera's sky to a flattened cubemap.
+        /// </summary>
+        /// <param name="camera">Requested camera.</param>
+        /// <returns>Result texture.</returns>
         public Texture2D ExportSkyToTexture(Camera camera)
         {
             return m_SkyManager.ExportSkyToTexture(camera);
         }
-
 
         RendererListDesc PrepareForwardOpaqueRendererList(CullingResults cullResults, HDCamera hdCamera)
         {
@@ -3360,7 +3383,6 @@ namespace UnityEngine.Rendering.HighDefinition
                 : m_ForwardOnlyPassNames;
             return  CreateOpaqueRendererListDesc(cullResults, hdCamera.camera, passNames, m_CurrentRendererConfigurationBakedLighting);
         }
-
 
         // Guidelines: In deferred by default there is no opaque in forward. However it is possible to force an opaque material to render in forward
         // by using the pass "ForwardOnly". In this case the .shader should not have "Forward" but only a "ForwardOnly" pass.
@@ -3647,7 +3669,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
 #if UNITY_EDITOR
                 // In scene view there is no motion vector, so we clear the RT to black
-                if (hdCamera.camera.cameraType == CameraType.SceneView && !CoreUtils.AreAnimatedMaterialsEnabled(hdCamera.camera))
+                if (hdCamera.camera.cameraType == CameraType.SceneView && !hdCamera.animateMaterials)
                 {
                     CoreUtils.SetRenderTarget(cmd, m_SharedRTManager.GetMotionVectorsBuffer(msaa), m_SharedRTManager.GetDepthStencilBuffer(msaa), ClearFlag.Color, Color.clear);
                 }
@@ -4145,6 +4167,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 mpb.SetTexture(HDShaderIDs._InputCubemap, debugParameters.skyReflectionTexture);
                 mpb.SetFloat(HDShaderIDs._Mipmap, lightingDebug.skyReflectionMipmap);
                 mpb.SetFloat(HDShaderIDs._DebugExposure, lightingDebug.debugExposure);
+                mpb.SetFloat(HDShaderIDs._SliceIndex, lightingDebug.cookieCubeArraySliceIndex);
                 cmd.SetViewport(new Rect(x, y, overlaySize, overlaySize));
                 cmd.DrawProcedural(Matrix4x4.identity, debugParameters.debugLatlongMaterial, 0, MeshTopology.Triangles, 3, 1, mpb);
                 HDUtils.NextOverlayCoord(ref x, ref y, overlaySize, overlaySize, debugParameters.hdCamera);
@@ -4289,7 +4312,20 @@ namespace UnityEngine.Rendering.HighDefinition
                         // We still clear in case of debug mode or on demand
                         if (m_CurrentDebugDisplaySettings.IsDebugDisplayEnabled() || hdCamera.frameSettings.IsEnabled(FrameSettingsField.ClearGBuffers))
                         {
-                            CoreUtils.SetRenderTarget(cmd, m_GbufferManager.GetBuffersRTI(), m_SharedRTManager.GetDepthStencilBuffer(), ClearFlag.Color, Color.clear);
+                            // On PS4 we don't have working MRT clear, so need to clear buffers one by one
+                            // https://fogbugz.unity3d.com/f/cases/1182018/
+                            if (Application.platform == RuntimePlatform.PS4)
+                            {
+                                var GBuffers = m_GbufferManager.GetBuffersRTI();
+                                foreach (var gbuffer in GBuffers)
+                                {
+                                    CoreUtils.SetRenderTarget(cmd, gbuffer, m_SharedRTManager.GetDepthStencilBuffer(), ClearFlag.Color, Color.clear);
+                                }
+                            }
+                            else
+                            {
+                                CoreUtils.SetRenderTarget(cmd, m_GbufferManager.GetBuffersRTI(), m_SharedRTManager.GetDepthStencilBuffer(), ClearFlag.Color, Color.clear);
+                            }
                         }
 
                         // If we are in deferred mode and the ssr is enabled, we need to make sure that the second gbuffer is cleared given that we are using that information for
@@ -4355,7 +4391,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 // In order to avoid that we decide that objects rendered after Post processes while TAA is active will not benefit from the depth buffer so we disable it.
                 bool taaEnabled = hdCamera.IsTAAEnabled();
                 hdCamera.UpdateAllViewConstants(false);
-                hdCamera.SetupGlobalParams(cmd, m_Time, m_LastTime, m_FrameCount);
+                hdCamera.SetupGlobalParams(cmd, m_FrameCount);
 
                 // Here we share GBuffer albedo buffer since it's not needed anymore
                 // Note: We bind the depth only if the ZTest for After Post Process is enabled. It is disabled by

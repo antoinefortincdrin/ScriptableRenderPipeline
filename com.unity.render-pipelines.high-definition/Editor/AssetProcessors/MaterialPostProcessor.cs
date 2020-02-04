@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
+
+// Material property names
+using static UnityEngine.Rendering.HighDefinition.HDMaterialProperties;
 
 namespace UnityEditor.Rendering.HighDefinition
 {
@@ -19,37 +23,64 @@ namespace UnityEditor.Rendering.HighDefinition
 
     class MaterialReimporter : Editor
     {
+        static bool s_NeedToCheckProjSettingExistence = true;
+
         static internal void ReimportAllMaterials()
         {
             string[] guids = AssetDatabase.FindAssets("t:material", null);
+            // There can be several materials subAssets per guid ( ie : FBX files ), remove duplicate guids.
+            var distinctGuids = guids.Distinct();
 
-            foreach (var asset in guids)
+            int materialIdx = 0;
+            int totalMaterials = distinctGuids.Count();
+            foreach (var asset in distinctGuids)
             {
+                materialIdx++;
                 var path = AssetDatabase.GUIDToAssetPath(asset);
+                EditorUtility.DisplayProgressBar("Material Upgrader re-import", string.Format("({0} of {1}) {2}", materialIdx, totalMaterials, path), (float)materialIdx / (float)totalMaterials);
                 AssetDatabase.ImportAsset(path);
             }
+            UnityEditor.EditorUtility.ClearProgressBar();
 
             MaterialPostprocessor.s_NeedsSavingAssets = true;
         }
 
         [InitializeOnLoadMethod]
-        static void ReimportAllMaterialsOnPackageChange()
+        static void RegisterUpgraderReimport()
         {
-            //This method is called at opening and when HDRP package change (update of manifest.json)
-            var curUpgradeVersion = HDProjectSettings.materialVersionForUpgrade;
-
-            if (curUpgradeVersion != MaterialPostprocessor.k_Migrations.Length)
-            {
-                EditorUtility.DisplayDialog("HDRP Material Migration", "Your High Definition Render Pipeline version requires a material upgrade." +
-                    " All materials in the project will be re-imported and saved to disk (and checked out if relevant) if changed. \n"+
-                    " Please consult the upgrade guide in the HDRP documentation for more information.", "Ok");
-                ReimportAllMaterials();
-            }
-
             EditorApplication.update += () =>
             {
-                if (Time.renderedFrameCount > 0 && MaterialPostprocessor.s_NeedsSavingAssets)
-                    MaterialPostprocessor.SaveAssetsToDisk();
+                if (Time.renderedFrameCount > 0)
+                {
+                    bool fileExist = true;
+                    // We check the file existence only once to avoid IO operations every frame.
+                    if(s_NeedToCheckProjSettingExistence)
+                    {
+                        fileExist = System.IO.File.Exists("ProjectSettings/HDRPProjectSettings.asset");
+                        s_NeedToCheckProjSettingExistence = false;
+                    }
+
+                    //This method is called at opening and when HDRP package change (update of manifest.json)
+                    var curUpgradeVersion = HDProjectSettings.materialVersionForUpgrade;
+
+                    if (curUpgradeVersion != MaterialPostprocessor.k_Migrations.Length)
+                    {
+                        string commandLineOptions = System.Environment.CommandLine;
+                        bool inTestSuite = commandLineOptions.Contains("-testResults");
+                        if (!inTestSuite && fileExist)
+                        {
+                            EditorUtility.DisplayDialog("HDRP Material upgrade", "The Materials in your Project were created using an older version of the High Definition Render Pipeline (HDRP)." +
+                                                        " Unity must upgrade them to be compatible with your current version of HDRP. \n" +
+                                                        " Unity will re-import all of the Materials in your project, save the upgraded Materials to disk, and check them out in source control if needed.\n"+
+                                                        " Please see the Material upgrade guide in the HDRP documentation for more information.", "Ok");
+                        }
+
+                        ReimportAllMaterials();
+                    }
+
+                    if (MaterialPostprocessor.s_NeedsSavingAssets)
+                        MaterialPostprocessor.SaveAssetsToDisk();
+                }
             };
         }
     }
@@ -157,6 +188,7 @@ namespace UnityEditor.Rendering.HighDefinition
         static internal Action<Material, HDShaderUtils.ShaderID>[] k_Migrations = new Action<Material, HDShaderUtils.ShaderID>[]
         {
              StencilRefactor,
+             ZWriteForTransparent,
         };
 
         #region Migrations
@@ -229,6 +261,15 @@ namespace UnityEditor.Rendering.HighDefinition
         //            break;
         //    }
         //}
+
+        static void ZWriteForTransparent(Material material, HDShaderUtils.ShaderID id)
+        {
+            // For transparent materials, the ZWrite property that is now used is _TransparentZWrite.
+            if (material.GetSurfaceType() == SurfaceType.Transparent)
+                material.SetFloat(kTransparentZWrite, material.GetZWrite() ? 1.0f : 0.0f);
+
+            HDShaderUtils.ResetMaterialKeywords(material);
+        }
 
         #endregion
 

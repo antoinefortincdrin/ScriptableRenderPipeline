@@ -34,7 +34,7 @@ namespace UnityEngine.Rendering.HighDefinition
         uint currentIteration = 0;
         uint maxIteration = 0;
 
-        public void InitPathTracing()
+        void InitPathTracing()
         {
 #if UNITY_EDITOR
             Undo.postprocessModifications += UndoRecordedCallback;
@@ -42,7 +42,7 @@ namespace UnityEngine.Rendering.HighDefinition
 #endif // UNITY_EDITOR
         }
 
-        public void ReleasePathTracing()
+        void ReleasePathTracing()
         {
 #if UNITY_EDITOR
             Undo.postprocessModifications -= UndoRecordedCallback;
@@ -89,7 +89,7 @@ namespace UnityEngine.Rendering.HighDefinition
                                         name: string.Format("PathTracingHistoryBuffer{0}", frameIndex));
         }
 
-        public void RenderPathTracing(HDCamera hdCamera, CommandBuffer cmd, RTHandle outputTexture, ScriptableRenderContext renderContext, int frameCount)
+        void RenderPathTracing(HDCamera hdCamera, CommandBuffer cmd, RTHandle outputTexture, ScriptableRenderContext renderContext, int frameCount)
         {
             RayTracingShader pathTracingShader = m_Asset.renderPipelineRayTracingResources.pathTracing;
             PathTracing pathTracingSettings = hdCamera.volumeStack.GetComponent<PathTracing>();

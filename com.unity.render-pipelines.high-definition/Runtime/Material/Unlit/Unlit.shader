@@ -2,9 +2,6 @@ Shader "HDRP/Unlit"
 {
     Properties
     {
-        // Versioning of material to help for upgrading
-        [HideInInspector] _HdrpVersion("_HdrpVersion", Float) = 2
-
         // Be careful, do not change the name here to _Color. It will conflict with the "fake" parameters (see end of properties) required for GI.
         _UnlitColor("Color", Color) = (1,1,1,1)
         _UnlitColorMap("ColorMap", 2D) = "white" {}
@@ -50,6 +47,7 @@ Shader "HDRP/Unlit"
         [HideInInspector] _AlphaSrcBlend("__alphaSrc", Float) = 1.0
         [HideInInspector] _AlphaDstBlend("__alphaDst", Float) = 0.0
         [HideInInspector][ToggleUI] _ZWrite("__zw", Float) = 1.0
+        [HideInInspector][ToggleUI] _TransparentZWrite("_TransparentZWrite", Float) = 0.0
         [HideInInspector] _CullMode("__cullmode", Float) = 2.0
         [Enum(UnityEditor.Rendering.HighDefinition.TransparentCullMode)] _TransparentCullMode("_TransparentCullMode", Int) = 2 // Back culling by default
         [HideInInspector] _ZTestModeDistortion("_ZTestModeDistortion", Int) = 8
@@ -490,6 +488,7 @@ Shader "HDRP/Unlit"
             #pragma raytracing surface_shader
 
             #define SHADOW_LOW
+            #pragma multi_compile _ TRANSPARENT_COLOR_SHADOW
 
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/RaytracingMacros.hlsl"
 

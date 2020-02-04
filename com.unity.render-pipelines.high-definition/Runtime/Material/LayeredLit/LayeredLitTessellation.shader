@@ -2,9 +2,6 @@ Shader "HDRP/LayeredLitTessellation"
 {
     Properties
     {
-        // Versioning of material to help for upgrading
-        [HideInInspector] _HdrpVersion("_HdrpVersion", Float) = 2
-
         // Following set of parameters represent the parameters node inside the MaterialGraph.
         // They are use to fill a SurfaceData. With a MaterialGraph this should not exist.
 
@@ -278,6 +275,7 @@ Shader "HDRP/LayeredLitTessellation"
         [HideInInspector] _AlphaDstBlend("__alphaDst", Float) = 0.0
 
         [HideInInspector][ToggleUI] _ZWrite ("__zw", Float) = 1.0
+        [HideInInspector][ToggleUI] _TransparentZWrite("_TransparentZWrite", Float) = 0.0
         [HideInInspector] _CullMode("__cullmode", Float) = 2.0
         [Enum(UnityEditor.Rendering.HighDefinition.TransparentCullMode)] _TransparentCullMode("_TransparentCullMode", Int) = 2 // Back culling by default
         [HideInInspector] _ZTestDepthEqualForOpaque("_ZTestDepthEqualForOpaque", Int) = 4 // Less equal
