@@ -104,10 +104,13 @@ void RayGen()
         rayIntersection.color = (_AccumulatedFrameTexture[currentPixelCoord].xyz * (sampleCount - 1) + rayIntersection.color) / sampleCount;
     _AccumulatedFrameTexture[currentPixelCoord] = float4(rayIntersection.color, 1.0);
 
+    // Apply exposure modifier
+    rayIntersection.color *= GetCurrentExposureMultiplier();
+
     // Add a little convergence cue to our result
     AddConvergenceCue(currentPixelCoord, sampleCount, rayIntersection.color);
 
-    _CameraColorTextureRW[currentPixelCoord] = float4(rayIntersection.color * GetCurrentExposureMultiplier(), 1.0);
+    _CameraColorTextureRW[currentPixelCoord] = float4(rayIntersection.color, 1.0);
 }
 
 // This should never be called, return magenta just in case
